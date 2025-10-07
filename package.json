@@ -1,0 +1,15 @@
+{
+  "name": "telefonforestallning",
+  "version": "1.0.0",
+  "description": "Interaktiv radioteater via telefon (Twilio + OpenAI + ElevenLabs)",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "twilio": "^4.23.0",
+    "axios": "^1.7.2"
+  }
+}
