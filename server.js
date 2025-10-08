@@ -30,5 +30,11 @@ twilioRoutes(app, { memory, ttsStore });
 webRoutes(app,   { memory, ttsStore });
 
 const PORT = process.env.PORT || 3000;
+import fs from "fs";
+import path from "path";
+
+const scenes = JSON.parse(fs.readFileSync(path.join(__dirname, "scenes", "call.json"), "utf8"));
+app.get("/scenes", (_, res) => res.json(scenes));
+
 app.listen(PORT, () => console.log("listening", PORT));
 
