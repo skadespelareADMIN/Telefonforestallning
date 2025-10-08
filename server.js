@@ -1,32 +1,34 @@
 import express from "express";
-import twilio from "twilio";
+import path from "path";
+import { fileURLToPath } from "url";
+import { makeMemory } from "./engine.js";
+import twilioRoutes from "./routes.twilio.js";
+import webRoutes from "./routes.web.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.use(express.static(path.join(__dirname, "public")));
 
-const { VoiceResponse } = twilio.twiml;
+const ttsStore = new Map();
+const memory = makeMemory();
 
-// Hälso-koll
 app.get("/health", (_, res) => res.send("ok"));
-
-// Twilio webhook för inkommande samtal
-app.post("/voice", (req, res) => {
-  const twiml = new VoiceResponse();
-
-  // Spela introfil (ställ i Railway env: INTRO_MP3_URL)
-  const intro = process.env.INTRO_MP3_URL
-    || "https://filesamples.com/samples/audio/mp3/sample3.mp3"; // tillfällig demo
-
-  twiml.play(intro);
-  twiml.hangup();
-
-  res.type("text/xml").send(twiml.toString());
+app.get("/debug", (_, res) => res.json({ INTRO_MP3_URL: process.env.INTRO_MP3_URL || "(not set)" }));
+app.get("/tts/:id", (req, res) => {
+  const buf = ttsStore.get(req.params.id);
+  if (!buf) return res.status(404).end();
+  res.setHeader("Content-Type", "audio/mpeg");
+  res.send(buf);
 });
+
+// Plugga in adaptrarna
+twilioRoutes(app, { memory, ttsStore });
+webRoutes(app,   { memory, ttsStore });
 
 const PORT = process.env.PORT || 3000;
-app.get("/", (_, res) => res.send("Telefonföreställning: servern kör ✅"));
-app.get("/debug", (_, res) => {
-  res.json({ INTRO_MP3_URL: process.env.INTRO_MP3_URL || "(not set)" });
-});
-app.listen(PORT, () => console.log(`listening on ${PORT}`));
+app.listen(PORT, () => console.log("listening", PORT));
+
