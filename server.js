@@ -96,5 +96,34 @@ app.get("/diag/tts", async (req, res) => {
     res.status(500).json({ ok: false, message: e.message });
   }
 });
+import axios from "axios";
+
+app.get("/diag/tts-raw", async (req, res) => {
+  try {
+    const url = `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}`;
+    const r = await axios.post(
+      url,
+      { text: "Test" },
+      {
+        responseType: "arraybuffer",
+        validateStatus: () => true,
+        headers: {
+          "xi-api-key": process.env.ELEVENLABS_API_KEY,
+          "Content-Type": "application/json",
+          Accept: "audio/mpeg",
+        },
+      }
+    );
+    res.json({
+      status: r.status,
+      type: r.headers["content-type"],
+      bytes: r.data.byteLength,
+      // visa ev. feltext från API:t
+      bodySnippet: r.status !== 200 ? Buffer.from(r.data).toString("utf8").slice(0,400) : null,
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 app.listen(PORT, () => console.log("listening", PORT));
