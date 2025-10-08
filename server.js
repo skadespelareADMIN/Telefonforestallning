@@ -2,7 +2,7 @@
 import express from "express";
 import path from "path";
 import fs from "fs";
-import axios from "axios";
+import axios from "axios"; // ✅ importeras bara här, högst upp
 import { fileURLToPath } from "url";
 
 import { makeMemory } from "./engine.js";
@@ -10,20 +10,18 @@ import twilioRoutes from "./routes.twilio.js";
 import webRoutes from "./routes.web.js";
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname  = path.dirname(__filename);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-
-// Statiska filer (webb-test UI i /public)
 app.use(express.static(path.join(__dirname, "public")));
 
-// --- States (delas mellan web & twilio) ---
-const ttsStore = new Map();     // { id: Buffer(MP3) }
-const memory   = makeMemory();  // per-session call/web-minne
+// --- gemensam state ---
+const ttsStore = new Map();
+const memory = makeMemory();
 
-// --- Hjälprutter ---
+// --- basrutter ---
 app.get("/health", (_, res) => res.send("ok"));
 app.get("/debug", (_, res) => {
   res.json({
@@ -32,7 +30,7 @@ app.get("/debug", (_, res) => {
   });
 });
 
-// TTS-serving (ElevenLabs-resultat som cachas i minnet)
+// --- TTS-serving (lokalt cacheade ljud från ElevenLabs) ---
 app.get("/tts/:id", (req, res) => {
   const buf = ttsStore.get(req.params.id);
   if (!buf) return res.status(404).end();
@@ -40,22 +38,26 @@ app.get("/tts/:id", (req, res) => {
   res.send(buf);
 });
 
-// Audio-proxy: spelar ALLT ljud via din egen domän (stabilare CORS/codec)
+// --- Audio-proxy (hämtar ljud utifrån) ---
 app.get("/audio", async (req, res) => {
   try {
     const u = req.query.u;
     if (!u) return res.status(400).send("Missing u");
-    const r = await axios.get(u, { responseType: "arraybuffer" });
+    const r = await axios.get(u, { responseType: "arraybuffer", validateStatus: () => true });
+
+    console.info("AUDIO PROXY", "url=", u, "status=", r.status, "type=", r.headers["content-type"]);
+    if (r.status >= 400) return res.status(502).send("Bad upstream " + r.status);
+
     const ct = r.headers["content-type"] || "audio/mpeg";
     res.setHeader("Content-Type", ct);
     res.send(Buffer.from(r.data));
   } catch (e) {
-    console.error("Audio proxy fail:", e?.message);
+    console.error("Audio proxy fail:", e.message);
     res.status(502).send("Bad audio");
   }
 });
 
-// Scenes-endpoint: exponerar ditt manu (scenes/call.json) till webben
+// --- Scenes (manusfilen) ---
 let scenes;
 try {
   const raw = fs.readFileSync(path.join(__dirname, "scenes", "call.json"), "utf8");
@@ -66,12 +68,7 @@ try {
 }
 app.get("/scenes", (_, res) => res.json(scenes));
 
-// --- Plugga in adaptrarna (delar state) ---
-twilioRoutes(app, { memory, ttsStore });
-webRoutes(app,   { memory, ttsStore });
-
-// --- Start ---
-const PORT = process.env.PORT || 3000;
+// --- Diagnosrutter ---
 import { ttsElevenLabs } from "./engine.js";
 import OpenAI from "openai";
 
@@ -96,7 +93,6 @@ app.get("/diag/tts", async (req, res) => {
     res.status(500).json({ ok: false, message: e.message });
   }
 });
-import axios from "axios";
 
 app.get("/diag/tts-raw", async (req, res) => {
   try {
@@ -118,12 +114,18 @@ app.get("/diag/tts-raw", async (req, res) => {
       status: r.status,
       type: r.headers["content-type"],
       bytes: r.data.byteLength,
-      // visa ev. feltext från API:t
-      bodySnippet: r.status !== 200 ? Buffer.from(r.data).toString("utf8").slice(0,400) : null,
+      bodySnippet: r.status !== 200 ? Buffer.from(r.data).toString("utf8").slice(0, 400) : null,
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
+// --- Plugga in Twilio + web-rutter ---
+twilioRoutes(app, { memory, ttsStore });
+webRoutes(app, { memory, ttsStore });
+
+// --- Start ---
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("listening", PORT));
+
