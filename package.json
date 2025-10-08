@@ -1,16 +1,15 @@
 {
   "name": "telefonforestallning",
   "version": "1.0.0",
-  "engines": { "node": "18.x" },
-  "description": "Interaktiv radioteater via telefon (Twilio + OpenAI + ElevenLabs)",
-  "main": "server.js",
+  "description": "Interaktiv radioteater via web + Twilio",
   "type": "module",
-  "scripts": {
-    "start": "node server.js"
-  },
+  "main": "server.js",
+  "engines": { "node": "18.x" },
+  "scripts": { "start": "node server.js" },
   "dependencies": {
     "express": "^4.19.2",
     "twilio": "^4.23.0",
-    "axios": "^1.7.2"
+    "axios": "^1.7.2",
+    "openai": "^4.0.0"
   }
 }
