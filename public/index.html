@@ -3,61 +3,117 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Interaktiv radioteater – webtest</title>
+  <title>Interaktiv föreställning</title>
   <style>
-    body{font-family:system-ui,sans-serif;max-width:680px;margin:40px auto;padding:0 16px}
-    button{padding:10px 14px;font-size:16px}
-    textarea{width:100%;height:100px;font-size:16px}
-    .row{display:flex;gap:8px;margin-top:8px}
+    body{font-family:system-ui,sans-serif;max-width:680px;margin:40px auto;padding:0 16px;background:#fafafa}
+    #overlay{position:fixed;inset:0;background:black;color:white;display:flex;align-items:center;justify-content:center;z-index:10}
+    #overlay button{font-size:22px;padding:16px 24px;border:0;border-radius:12px;cursor:pointer}
+    #log{white-space:pre-wrap;margin-top:16px;font-size:16px;line-height:1.4}
   </style>
 </head>
 <body>
-  <h1>Interaktiv radioteater – webtest</h1>
-  <p>Skriv något (eller klicka “🎙️ tala”) och få svar med röst.</p>
-
-  <textarea id="input" placeholder="Skriv här..."></textarea>
-  <div class="row">
-    <button id="speakBtn">🎙️ tala</button>
-    <button id="sendBtn">Skicka</button>
-  </div>
-
-  <h3>Svar</h3>
-  <pre id="textOut" style="white-space:pre-wrap;"></pre>
-  <audio id="player" controls></audio>
+  <div id="overlay"><button id="startBtn">🎭 Starta föreställningen</button></div>
+  <h1>Interaktiv föreställning</h1>
+  <div id="log"></div>
+  <audio id="player" preload="auto"></audio>
 
   <script>
-    const input = document.getElementById('input');
-    const out   = document.getElementById('textOut');
-    const audio = document.getElementById('player');
+    const log = document.getElementById("log");
+    const player = document.getElementById("player");
+    const overlay = document.getElementById("overlay");
+    const startBtn = document.getElementById("startBtn");
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let rec;
+    const sessionId = crypto.randomUUID();
 
-    async function send(text){
-      out.textContent = "… tänker …";
-      const r = await fetch('/web-act', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ text, sessionId: 'dev' })
-      });
-      const data = await r.json();
-      if(data.error){ out.textContent = "Fel: " + data.error; return; }
-      out.textContent = data.reply;
-      audio.src = data.audioUrl;
-      audio.play().catch(()=>{});
+    const wait = ms => new Promise(r=>setTimeout(r,ms));
+    const addLog = t => log.textContent += t + "\n";
+
+    async function fetchScenes(){
+      return await fetch("/scenes").then(r=>r.json());
     }
 
-    document.getElementById('sendBtn').onclick = ()=>{
-      const t = input.value.trim();
-      if(t) send(t);
-    };
+    function listenOnce(maxSeconds){
+      return new Promise((resolve,reject)=>{
+        if(!SR){reject(new Error("Taligenkänning saknas"));return;}
+        rec = new SR();
+        rec.lang="sv-SE";
+        rec.interimResults=false;
+        rec.maxAlternatives=1;
+        let timer=setTimeout(()=>{rec.stop();reject(new Error("timeout"));}, maxSeconds*1000);
+        rec.onresult=e=>{
+          clearTimeout(timer);
+          resolve(e.results[0][0].transcript);
+        };
+        rec.onerror=e=>reject(e);
+        rec.start();
+      });
+    }
 
-    // Tal-till-text (Chrome)
-    document.getElementById('speakBtn').onclick = ()=>{
-      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if(!SR){ alert('Taligenkänning stöds inte i denna webbläsare.'); return; }
-      const rec = new SR(); rec.lang='sv-SE'; rec.interimResults=false; rec.maxAlternatives=1;
-      rec.onresult = e => { const t = e.results[0][0].transcript; input.value=t; send(t); };
-      rec.onerror  = e => alert('Fel i taligenkänning: ' + e.error);
-      rec.start();
-    };
+    async function aiExchange(opening,prompt,closing,maxSec){
+      addLog("🎭 AI: " + opening);
+      // Säg öppningen via ElevenLabs
+      const openingResp = await fetch("/web-act",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({text:opening,sessionId,prompt})
+      });
+      const openData = await openingResp.json();
+      player.src=openData.audioUrl;
+      await player.play(); await new Promise(r=>player.onended=r);
+
+      addLog("🎤 Du: (lyssnar...)");
+      let user = "(tystnad)";
+      try { user = await listenOnce(maxSec); } catch {}
+      addLog("Du: " + user);
+
+      const replyResp = await fetch("/web-act",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({text:user,sessionId,prompt})
+      });
+      const data = await replyResp.json();
+      addLog("AI: " + data.reply);
+      player.src=data.audioUrl;
+      await player.play(); await new Promise(r=>player.onended=r);
+
+      if(closing){
+        addLog("🎭 Avslut: " + closing);
+        const closeResp = await fetch("/web-act",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({text:closing,sessionId,prompt})
+        });
+        const closeData = await closeResp.json();
+        player.src=closeData.audioUrl;
+        await player.play(); await new Promise(r=>player.onended=r);
+      }
+    }
+
+    async function playAudio(url){
+      addLog("🎵 Spelar: " + url);
+      player.src = url;
+      await player.play(); await new Promise(r=>player.onended=r);
+    }
+
+    async function startShow(){
+      overlay.style.display="none";
+      const show = await fetchScenes();
+      const personaPrompt = show.persona.systemPrompt;
+
+      addLog("Föreställningen startar …");
+      for(const act of show.acts){
+        if(act.type==="audio") await playAudio(act.url);
+        if(act.type==="ai"){
+          await aiExchange(act.opening, personaPrompt, act.closing, act.maxTurnSeconds);
+          await wait(500);
+        }
+      }
+      addLog("🎬 Föreställningen är slut.");
+    }
+
+    startBtn.onclick=startShow;
   </script>
 </body>
 </html>
+
