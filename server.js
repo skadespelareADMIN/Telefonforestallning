@@ -26,4 +26,7 @@ app.post("/voice", (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.get("/", (_, res) => res.send("Telefonföreställning: servern kör ✅"));
+app.get("/debug", (_, res) => {
+  res.json({ INTRO_MP3_URL: process.env.INTRO_MP3_URL || "(not set)" });
+});
 app.listen(PORT, () => console.log(`listening on ${PORT}`));
