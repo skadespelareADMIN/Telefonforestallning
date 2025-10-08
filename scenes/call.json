@@ -11,7 +11,7 @@
     {
       "type": "ai",
       "id": "act1",
-      "opening": "Detta är en teaterföreställning av Administrationen. Välkommen."
+      "opening": "Detta är en teaterföreställning av Administrationen. Välkommen.",
       "maxTurnSeconds": 90
     },
     {
@@ -32,7 +32,7 @@
       "type": "ai",
       "id": "act3",
       "opening": "Det är sista akten nu.",
-      "closing": "Det är det vackraste vi har",
+      "closing": "Det är det vackraste vi har.",
       "maxTurnSeconds": 150
     },
     {
