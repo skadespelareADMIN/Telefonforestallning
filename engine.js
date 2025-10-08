@@ -48,10 +48,11 @@ Publik nu: ${userText}`;
 export async function ttsElevenLabs(text, ttsStore) {
   const voice = process.env.ELEVENLABS_VOICE_ID;
   const apiKey = process.env.ELEVENLABS_API_KEY;
-  const base = process.env.PUBLIC_BASE_URL;
+  const base = (process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, ""); // ta bort trailing slash
 
-  if (!voice || !apiKey || !base) {
-    throw new Error("ElevenLabs-konfiguration saknas (VOICE_ID, API_KEY, eller PUBLIC_BASE_URL)");
+  if (!voice) throw new Error("Saknar ELEVENLABS_VOICE_ID");
+  if (!apiKey) throw new Error("Saknar ELEVENLABS_API_KEY");
+  if (!base)  throw new Error("Saknar PUBLIC_BASE_URL");
   }
 
   const r = await axios.post(
