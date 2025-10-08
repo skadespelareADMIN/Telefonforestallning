@@ -17,6 +17,49 @@
   <div id="log"></div>
 
   <script type="module">
+const audioUrl = (raw) => `/audio?u=${encodeURIComponent(raw)}`;
+
+async function fetchScenes() {
+  try {
+    const r = await fetch("/scenes");
+    if (!r.ok) throw new Error("Scenes HTTP " + r.status);
+    return await r.json();
+  } catch (e) {
+    log.textContent += "Kunde inte hämta /scenes: " + e.message + "\n";
+    throw e;
+  }
+}
+
+async function playMusic(url) {
+  try {
+    log.textContent += "🎵 Spelar: " + url + "\n";
+    await showPlayer.playUrl(audioUrl(url)); // proxar via servern
+  } catch (e) {
+    log.textContent += "Fel vid uppspelning: " + e.message + "\n";
+    throw e;
+  }
+}
+
+async function aiSpeak(text, personaPrompt) {
+  try {
+    const r = await fetch("/web-act", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, sessionId, prompt: personaPrompt })
+    });
+    if (!r.ok) {
+      const t = await r.text();
+      throw new Error("web-act HTTP " + r.status + " " + t);
+    }
+    const data = await r.json();
+    await showPlayer.playUrl(audioUrl(data.audioUrl)); // även TTS går via proxyn
+    return data.reply;
+  } catch (e) {
+    log.textContent += "Fel i AI/tts: " + e.message + "\n";
+    throw e;
+  }
+}
+
     import { ShowPlayer } from "./player.js";
 
     const showPlayer = new ShowPlayer();
