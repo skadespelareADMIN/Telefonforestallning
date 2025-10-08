@@ -72,4 +72,29 @@ webRoutes(app,   { memory, ttsStore });
 
 // --- Start ---
 const PORT = process.env.PORT || 3000;
+import { ttsElevenLabs } from "./engine.js";
+import OpenAI from "openai";
+
+app.get("/diag/openai", async (req, res) => {
+  try {
+    const oai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const r = await oai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: "Säg 'hej' kort." }],
+    });
+    res.json({ ok: true, text: r.choices[0].message.content });
+  } catch (e) {
+    res.status(500).json({ ok: false, message: e.message, data: e.response?.data });
+  }
+});
+
+app.get("/diag/tts", async (req, res) => {
+  try {
+    const url = await ttsElevenLabs(req.query.text || "Test av ElevenLabs", ttsStore);
+    res.json({ ok: true, url });
+  } catch (e) {
+    res.status(500).json({ ok: false, message: e.message });
+  }
+});
+
 app.listen(PORT, () => console.log("listening", PORT));
