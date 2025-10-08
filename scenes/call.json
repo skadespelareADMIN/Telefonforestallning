@@ -6,7 +6,7 @@
   "acts": [
     {
       "type": "audio",
-      "url": "https://example.com/intro.mp3"
+      "url": "https://musikentillforestallning.netlify.app/intro.mp3"
     },
     {
       "type": "ai",
@@ -16,7 +16,7 @@
     },
     {
       "type": "audio",
-      "url": "https://example.com/intermezzo1.mp3"
+      "url": "https://musikentillforestallning.netlify.app/intro.mp3"
     },
     {
       "type": "ai",
@@ -26,7 +26,7 @@
     },
     {
       "type": "audio",
-      "url": "https://example.com/intermezzo2.mp3"
+      "url": "https://musikentillforestallning.netlify.app/intro.mp3"
     },
     {
       "type": "ai",
@@ -37,7 +37,7 @@
     },
     {
       "type": "audio",
-      "url": "https://example.com/outro.mp3"
+      "url": "https://musikentillforestallning.netlify.app/intro.mp3"
     }
   ]
 }
