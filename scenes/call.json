@@ -11,7 +11,7 @@
     {
       "type": "ai",
       "id": "act1",
-      "opening": "Detta är en teaterföreställning av Administrationen. Välkommen, Freja. Du är sen – som vanligt. Var har du varit?",
+      "opening": "Detta är en teaterföreställning av Administrationen. Välkommen.
       "maxTurnSeconds": 90
     },
     {
@@ -21,7 +21,7 @@
     {
       "type": "ai",
       "id": "act2",
-      "opening": "Jag tänkte på hur du sa 'konst är kommunikation'. Det är ju fullständigt nonsens, eller hur? Förklara dig.",
+      "opening": "Jag tänkte på det du sa sist, minns du?",
       "maxTurnSeconds": 120
     },
     {
@@ -31,8 +31,8 @@
     {
       "type": "ai",
       "id": "act3",
-      "opening": "Jag tror inte du förstår hur mycket jag hatar och älskar den här repetitionen. Det är sista akten nu. Säg något sant, Freja.",
-      "closing": "Tystnad. Det är det vackraste vi har kvar.",
+      "opening": "Det är sista akten nu.",
+      "closing": "Det är det vackraste vi har",
       "maxTurnSeconds": 150
     },
     {
