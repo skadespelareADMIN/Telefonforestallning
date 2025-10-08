@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Interaktiv radioteater – webtest</title>
+  <style>
+    body{font-family:system-ui,sans-serif;max-width:680px;margin:40px auto;padding:0 16px}
+    button{padding:10px 14px;font-size:16px}
+    textarea{width:100%;height:100px;font-size:16px}
+    .row{display:flex;gap:8px;margin-top:8px}
+  </style>
+</head>
+<body>
+  <h1>Interaktiv radioteater – webtest</h1>
+  <p>Skriv något (eller klicka “🎙️ tala”) och få svar med röst.</p>
+
+  <textarea id="input" placeholder="Skriv här..."></textarea>
+  <div class="row">
+    <button id="speakBtn">🎙️ tala</button>
+    <button id="sendBtn">Skicka</button>
+  </div>
+
+  <h3>Svar</h3>
+  <pre id="textOut" style="white-space:pre-wrap;"></pre>
+  <audio id="player" controls></audio>
+
+  <script>
+    const input = document.getElementById('input');
+    const out   = document.getElementById('textOut');
+    const audio = document.getElementById('player');
+
+    async function send(text){
+      out.textContent = "… tänker …";
+      const r = await fetch('/web-act', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ text, sessionId: 'dev' })
+      });
+      const data = await r.json();
+      if(data.error){ out.textContent = "Fel: " + data.error; return; }
+      out.textContent = data.reply;
+      audio.src = data.audioUrl;
+      audio.play().catch(()=>{});
+    }
+
+    document.getElementById('sendBtn').onclick = ()=>{
+      const t = input.value.trim();
+      if(t) send(t);
+    };
+
+    // Tal-till-text (Chrome)
+    document.getElementById('speakBtn').onclick = ()=>{
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if(!SR){ alert('Taligenkänning stöds inte i denna webbläsare.'); return; }
+      const rec = new SR(); rec.lang='sv-SE'; rec.interimResults=false; rec.maxAlternatives=1;
+      rec.onresult = e => { const t = e.results[0][0].transcript; input.value=t; send(t); };
+      rec.onerror  = e => alert('Fel i taligenkänning: ' + e.error);
+      rec.start();
+    };
+  </script>
+</body>
+</html>
