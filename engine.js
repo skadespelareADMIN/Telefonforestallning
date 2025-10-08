@@ -3,13 +3,13 @@ import OpenAI from "openai";
 import axios from "axios";
 import { randomUUID } from "crypto";
 
-// ---------- OpenAI ----------
+// ---------- OpenAI-klient ----------
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// Litet minne per session (för kort historik)
-export function makeMemory() {
+// ---------- Litet minne per session ----------
+function makeMemory() {
   const map = new Map();
   return {
     get(sessionId) {
@@ -18,10 +18,8 @@ export function makeMemory() {
     push(sessionId, user, ai) {
       const hist = map.get(sessionId) || [];
       hist.push({ user, ai });
-      // begränsa historiken så den inte växer okontrollerat
-      const trimmed = hist.slice(-10); // senaste 10 turer
-      map.set(sessionId, trimmed);
-      return trimmed;
+      map.set(sessionId, hist.slice(-10)); // spara senaste 10 turer
+      return map.get(sessionId);
     },
     reset(sessionId) {
       map.delete(sessionId);
@@ -29,40 +27,30 @@ export function makeMemory() {
   };
 }
 
-/**
- * generateReply
- * - Tar en enkel historik [{user, ai}, ...] + användarens nya text
- * - Låter en persona vara systemprompt (om skickad)
- * - Svarar kort och tal-vänligt, inga dikter
- */
-export async function generateReply(history = [], userText = "", personaPrompt = "") {
+// ---------- Generera AI-svar ----------
+async function generateReply(history = [], userText = "", personaPrompt = "") {
   if (!process.env.OPENAI_API_KEY) {
     throw new Error("Saknar OPENAI_API_KEY");
   }
 
-  // Bygg upp messages som riktig konversation
   const messages = [];
 
-  // Persona som systemprompt (ger stil/styrning)
+  // persona/styrning → system
   messages.push({
     role: "system",
     content:
       personaPrompt ||
       [
         "Du är en karaktär i en interaktiv teater på svenska.",
-        "Svara kort och konkret (1–2 meningar).",
-        "Formulera dig som talad dialog, inte poesi.",
-        "Inga listor, inga långa utläggningar, inga rim.",
+        "Svara kort (1–2 meningar), som talad dialog.",
+        "Ingen poesi, inga listor, vardagligt tonfall.",
       ].join(" "),
   });
 
-  // Lägg in tidigare turer som user/assistant-par
   for (const turn of history.slice(-10)) {
     if (turn?.user) messages.push({ role: "user", content: String(turn.user) });
     if (turn?.ai) messages.push({ role: "assistant", content: String(turn.ai) });
   }
-
-  // Nuvarande publikreplik
   messages.push({ role: "user", content: String(userText || "(tystnad)") });
 
   const r = await openai.chat.completions.create({
@@ -72,8 +60,49 @@ export async function generateReply(history = [], userText = "", personaPrompt =
     max_tokens: 120,
   });
 
-  const reply = r?.choices?.[0]?.message?.content?.trim() || "Okej.";
-  return reply;
+  return r?.choices?.[0]?.message?.content?.trim() || "Okej.";
 }
 
-// ----
+// ---------- ElevenLabs TTS ----------
+async function ttsElevenLabs(text, ttsStore) {
+  if (!text || !text.trim()) throw new Error("Ingen text för TTS");
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  const voiceId = process.env.ELEVENLABS_VOICE_ID;
+  if (!apiKey) throw new Error("Saknar ELEVENLABS_API_KEY");
+  if (!voiceId) throw new Error("Saknar ELEVENLABS_VOICE_ID");
+  if (!ttsStore || typeof ttsStore.set !== "function") {
+    throw new Error("ttsStore saknas eller är felaktig");
+  }
+
+  const url = `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?optimize_streaming_latency=0&output_format=mp3_44100_128`;
+  const payload = {
+    text: String(text).slice(0, 4000),
+    model_id: "eleven_turbo_v2_5",
+    voice_settings: {
+      stability: 0.5,
+      similarity_boost: 0.7,
+      style: 0.2,
+      use_speaker_boost: true,
+    },
+  };
+
+  const resp = await axios.post(url, payload, {
+    headers: {
+      "xi-api-key": apiKey,
+      "Content-Type": "application/json",
+      Accept: "audio/mpeg",
+    },
+    responseType: "arraybuffer",
+    timeout: 30000,
+  });
+
+  const id = randomUUID();
+  ttsStore.set(id, Buffer.from(resp.data));
+
+  const base = (process.env.PUBLIC_BASE_URL || "").replace(/\/+$/, "");
+  return base ? `${base}/tts/${id}` : `/tts/${id}`;
+}
+
+// ---------- Exporter (viktigt för Twilio-rutten) ----------
+export { makeMemory, generateReply, ttsElevenLabs };
+export default { makeMemory, generateReply, ttsElevenLabs };
