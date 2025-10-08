@@ -1,40 +1,73 @@
-// engine.js
+import OpenAI from "openai";
 import axios from "axios";
-import crypto from "crypto";
+import { randomUUID } from "crypto";
 
+// --- Initiera OpenAI ---
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+// --- Skapa minne för varje session ---
 export function makeMemory() {
-  const m = new Map();
+  const map = new Map();
   return {
-    get: (id) => m.get(id) || [],
-    push: (id, user, ai) => m.set(id, [...(m.get(id)||[]), { user, ai }])
+    get(sessionId) {
+      return map.get(sessionId) || [];
+    },
+    push(sessionId, user, ai) {
+      const hist = map.get(sessionId) || [];
+      hist.push({ user, ai });
+      map.set(sessionId, hist.slice(-10)); // spara senaste 10 turer
+    },
+    clear(sessionId) {
+      map.delete(sessionId);
+    },
   };
 }
 
-export async function generateReply(history, userText) {
-  const prompt =
-`Du är en stressad, grandios teaterregissör (Žižek-energi, nämn honom aldrig).
-Svara på svenska, 1–3 meningar, intensivt och med följdfråga.
-Historia:
-${history.map(h=>`[Publik] ${h.user}\n[Du] ${h.ai}`).join('\n')}
+// --- GPT-svar ---
+export async function generateReply(history, userText, personaPrompt = "") {
+  const prompt = `${personaPrompt}
+
+Tidigare:
+${history.map(h => `[Publik] ${h.user}\n[Du] ${h.ai}`).join("\n")}
 Publik nu: ${userText}`;
-  const r = await axios.post("https://api.openai.com/v1/chat/completions", {
+
+  const response = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
-      { role: "system", content: "Svara på svenska." },
-      { role: "user", content: prompt }
+      { role: "system", content: "Du är en teaterkaraktär som svarar poetiskt och spontant." },
+      { role: "user", content: prompt },
     ],
-    temperature: 0.9
-  }, { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }});
-  return r.data.choices[0].message.content.trim();
+  });
+
+  return response.choices[0].message.content.trim();
 }
 
+// --- Text till röst med ElevenLabs ---
 export async function ttsElevenLabs(text, ttsStore) {
+  const voice = process.env.ELEVENLABS_VOICE_ID;
+  const apiKey = process.env.ELEVENLABS_API_KEY;
+  const base = process.env.PUBLIC_BASE_URL;
+
+  if (!voice || !apiKey || !base) {
+    throw new Error("ElevenLabs-konfiguration saknas (VOICE_ID, API_KEY, eller PUBLIC_BASE_URL)");
+  }
+
   const r = await axios.post(
-    `https://api.elevenlabs.io/v1/text-to-speech/${process.env.ELEVENLABS_VOICE_ID}`,
-    { text, model_id: "eleven_multilingual_v2" },
-    { headers: { "xi-api-key": process.env.ELEVENLABS_API_KEY }, responseType: "arraybuffer" }
+    `https://api.elevenlabs.io/v1/text-to-speech/${voice}`,
+    { text, voice_settings: { stability: 0.5, similarity_boost: 0.75 } },
+    {
+      headers: {
+        "xi-api-key": apiKey,
+        "Content-Type": "application/json",
+        Accept: "audio/mpeg",
+      },
+      responseType: "arraybuffer",
+    }
   );
-  const id = crypto.randomUUID();
+
+  const id = randomUUID();
   ttsStore.set(id, Buffer.from(r.data));
-  return `${process.env.PUBLIC_BASE_URL}/tts/${id}`;
+  return `${base}/tts/${id}`;
 }
